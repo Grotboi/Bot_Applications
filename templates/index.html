@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Система заявок</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+   
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-6">
+        
+        <div class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-2">Система заявок</h1>
+            <div class="w-24 h-1 bg-blue-500 mx-auto rounded"></div>
+        </div>
+
+        
+        <div class="flex justify-center mb-6">
+            {% if view_type == 'active' %}
+                <a href="/?show_completed=true" 
+                   class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-3 px-6 rounded-lg shadow-md transition duration-200 transform hover:scale-105">
+                    Показать выполненные заявки
+                </a>
+            {% else %}
+                <a href="/?show_completed=false" 
+                   class="bg-green-500 hover:bg-green-600 text-white font-medium py-3 px-6 rounded-lg shadow-md transition duration-200 transform hover:scale-105">
+                    Показать активные заявки
+                </a>
+            {% endif %}
+        </div>
+
+      
+        {% if view_type == 'active' %}
+            <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+                <h2 class="text-xl font-semibold text-gray-700 mb-4">Управление заявками</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <form action="/set_in_progress" method="POST" class="space-y-2">
+                        <label for="in_progress_id" class="block text-sm font-medium text-gray-700">
+                            Перевести заявку "В работе"
+                        </label>
+                        <div class="flex flex-col sm:flex-row gap-2">
+                            <input type="text" 
+                                   id="in_progress_id" 
+                                   name="application_id" 
+                                   required
+                                   placeholder="Введите ID заявки"
+                                   class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
+                            <button type="submit" 
+                                    class="bg-yellow-500 hover:bg-yellow-600 text-white font-medium px-6 py-2 rounded-lg transition duration-200">
+                                В работу
+                            </button>
+                        </div>
+                    </form>
+
+                    <form action="/set_completed" method="POST" class="space-y-2">
+                        <label for="completed_id" class="block text-sm font-medium text-gray-700">
+                            Отметить заявку "Выполнена"
+                        </label>
+                        <div class="flex flex-col sm:flex-row gap-2">
+                            <input type="text" 
+                                   id="completed_id" 
+                                   name="application_id" 
+                                   required
+                                   placeholder="Введите ID заявки"
+                                   class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                            <button type="submit" 
+                                    class="bg-green-500 hover:bg-green-600 text-white font-medium px-6 py-2 rounded-lg transition duration-200">
+                                Выполнена
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        {% endif %}
+
+        
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
+              <h2 class="text-2xl font-bold text-gray-800 mb-2 md:mb-0">
+                  {% if view_type == 'active' %}
+                      Активные заявки
+                  {% else %}
+                      Выполненные заявки
+                  {% endif %}
+                  <span class="text-sm font-normal text-gray-500 ml-2">
+                      ({{ applications|length }} шт.)
+                  </span>
+              </h2>
+              
+              {% if view_type == 'completed' and applications|length > 0 %}
+              <button id="exportPdfBtn" 
+                      class="bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg shadow transition duration-200 flex items-center justify-center">
+                  <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
+                  </svg>
+                  Экспорт в PDF
+              </button>
+              {% endif %}
+            </div>
+
+            <!-- Таблица заявок -->
+            {% if applications|length > 0 %}
+                <div class="overflow-x-auto">
+                    <table id="applicationsTable" class="w-full text-sm md:text-base">
+                        <thead>
+                            <tr class="bg-gray-100">
+                                <th class="px-4 py-3 text-left font-semibold text-gray-700 rounded-l-lg">ID</th>
+                                <th class="px-4 py-3 text-left font-semibold text-gray-700">ФИО</th>
+                                <th class="px-4 py-3 text-left font-semibold text-gray-700 hidden md:table-cell">Дата</th>
+                                <th class="px-4 py-3 text-left font-semibold text-gray-700" style="width: 30%;">Описание</th>
+                                <th class="px-4 py-3 text-left font-semibold text-gray-700">Статус</th>
+                                {% if view_type == 'completed' %}
+                                    
+                                    <th class="px-4 py-3 text-left font-semibold text-gray-700 rounded-r-lg export-hide">Действия</th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            {% for app in applications %}
+                                <tr class="hover:bg-gray-50 transition duration-150">
+                                    <td class="px-4 py-3 font-mono text-xs md:text-sm bg-gray-50 rounded">{{ app[0] }}</td>
+                                    <td class="px-4 py-3 font-medium text-gray-800">{{ app[1] }}</td>
+                                    <td class="px-4 py-3 text-gray-600 hidden md:table-cell">
+                                        <span class="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs">
+                                            {{ app[2] }}
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-gray-700" style="width: 30%;">
+                                        <!-- Текст с правильным переносом -->
+                                        <div style="word-wrap: break-word; white-space: normal; max-width: 300px;">
+                                            {{ app[3] }}
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        {% if app[4] == 'новая' %}
+                                            <span class="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">
+                                                Новая
+                                            </span>
+                                        {% elif app[4] == 'в работе' %}
+                                            <span class="inline-block bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full text-xs font-medium">
+                                                В работе
+                                            </span>
+                                        {% else %}
+                                            <span class="inline-block bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
+                                                Выполнена
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    {% if view_type == 'completed' %}
+                                       
+                                        <td class="px-4 py-3 export-hide">
+                                            <div class="flex flex-col sm:flex-row gap-2">
+                                                
+                                                <form action="/edit_status" method="POST" class="flex-1">
+                                                    <input type="hidden" name="application_id" value="{{ app[0] }}">
+                                                    <div class="flex gap-1">
+                                                        <select name="new_status" 
+                                                                class="flex-1 text-xs px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500">
+                                                            <option value="новая" {% if app[4] == 'новая' %}selected{% endif %}>Новая</option>
+                                                            <option value="в работе" {% if app[4] == 'в работе' %}selected{% endif %}>В работе</option>
+                                                            <option value="выполнена" {% if app[4] == 'выполнена' %}selected{% endif %}>Выполнена</option>
+                                                        </select>
+                                                        <button type="submit" 
+                                                                class="bg-blue-500 hover:bg-blue-600 text-white text-xs px-2 py-1 rounded transition duration-200">
+                                                            ✓
+                                                        </button>
+                                                    </div>
+                                                </form>
+                                                
+                                               
+                                                <form action="/delete_application" method="POST" 
+                                                      onsubmit="return confirm('Вы уверены, что хотите удалить эту заявку?')" 
+                                                      class="flex">
+                                                    <input type="hidden" name="application_id" value="{{ app[0] }}">
+                                                    <button type="submit" 
+                                                            class="bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded transition duration-200">
+                                                        🗑️
+                                                    </button>
+                                                </form>
+                                            </div>
+                                        </td>
+                                    {% endif %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="text-center py-12">
+                    <div class="text-gray-400 text-6xl mb-4">📋</div>
+                    <p class="text-gray-500 text-lg">
+                        {% if view_type == 'active' %}
+                            Нет активных заявок
+                        {% else %}
+                            Нет выполненных заявок
+                        {% endif %}
+                    </p>
+                </div>
+            {% endif %}
+        </div>
+
+        
+        {% if applications|length > 0 %}
+            <div class="text-center text-sm text-gray-500">
+                Показано {{ applications|length }} заявок
+            </div>
+        {% endif %}
+    </div>
+
+    
+    <script>
+        document.getElementById('exportPdfBtn')?.addEventListener('click', function() {
+            const { jsPDF } = window.jspdf;
+            const table = document.getElementById('applicationsTable');
+            
+            
+            const hideElements = document.querySelectorAll('.export-hide');
+            hideElements.forEach(el => {
+                el.style.display = 'none';
+            });
+            
+            
+            const lastHeader = document.querySelector('thead th:last-child');
+            if (lastHeader && !lastHeader.classList.contains('export-hide')) {
+                lastHeader.classList.add('rounded-r-lg');
+            }
+            
+            
+            html2canvas(table, { 
+                scale: 2,
+                useCORS: true,
+                logging: false
+            }).then(canvas => {
+                const imgData = canvas.toDataURL('image/png');
+                const pdf = new jsPDF('p', 'mm', 'a4');
+                const imgWidth = 190; // Ширина изображения в mm
+                const pageHeight = 280; // Высота страницы A4 в mm
+                const imgHeight = canvas.height * imgWidth / canvas.width;
+                let heightLeft = imgHeight;
+                let position = 10; 
+
+                pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                heightLeft -= pageHeight;
+
+                
+                while (heightLeft >= 0) {
+                    position = heightLeft - imgHeight;
+                    pdf.addPage();
+                    pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+                    heightLeft -= pageHeight;
+                }
+
+                
+                hideElements.forEach(el => {
+                    el.style.display = '';
+                });
+                
+                
+                if (lastHeader && !lastHeader.classList.contains('export-hide')) {
+                    lastHeader.classList.remove('rounded-r-lg');
+                }
+
+                
+                pdf.save('completed_applications.pdf');
+            }).catch(error => {
+                
+                hideElements.forEach(el => {
+                    el.style.display = '';
+                });
+                if (lastHeader && !lastHeader.classList.contains('export-hide')) {
+                    lastHeader.classList.remove('rounded-r-lg');
+                }
+                
+                console.error('Ошибка при создании PDF:', error);
+                alert('Произошла ошибка при создании PDF. Проверьте консоль для получения дополнительной информации.');
+            });
+        });
+    </script>
+    
+    <style>
+    
+        @media print {
+            .export-hide {
+                display: none !important;
+            }
+        }
+    </style>
+</body>
+</html>
