@@ -8,7 +8,7 @@ import os
 
 app = Flask(__name__)
 
-BOT_TOKEN = "8379265885:AAESETRnifM5OgwisOfs0iC9hhzJf0S88vA"
+BOT_TOKEN = ""
 bot = telebot.TeleBot(BOT_TOKEN)
 
 def get_db_connection():
@@ -188,4 +188,5 @@ if __name__ == "__main__":
         bot_thread.daemon = True
         bot_thread.start()
     
+
     app.run(debug=True)
